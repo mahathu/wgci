@@ -1,4 +1,4 @@
-import os, json, requests
+import os, json, requests, yaml
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
@@ -28,43 +28,51 @@ def get_detail_from_ad_url(url):
         "title": url.split("=")[-1],
         "description": description,
         "url": urljoin(BASE_URL, url),
-        "filtered": any(w in description.lower() for w in blacklist),
+        "filtered": any(w in description.lower() for w in CONFIG["filter_strings"]),
+    }
+
+
+def generate_params_from_config(config):
+    return {
+        "st": "1",  # Verstecktes input-Feld, wenn es fehlt liefert zquery.pl ein leeres Ergebnis zurück
+        "r": "1",  # Anzahl Zimmer gesucht
+        "g": [
+            str(i)
+            for i in range(config["n_rooms_range"][0], config["n_rooms_range"][1] + 1)
+        ],  # WG-Größe
+        "b": config["rent_range"][0],  # min rent
+        "a": config["rent_range"][1],  # max rent
+        "c": config["room_sqm_range"][0],  # min room size
+        "d": config["room_sqm_range"][1],  # max room size
+        "v": "dauerhaft" if config["long_term"] else "bis 6 Monate",  # wie lange
+        "p": config[
+            "max_age"
+        ],  # Nur WG-Angebote berücksichtigen, die nicht älter sind als max_age Tage
     }
 
 
 if __name__ == "__main__":
-    ROOMS_RANGE = 2, 7
-    RENT_RANGE = 200, 700
-    ROOM_SQM_RANGE = 10, 40
-    MAX_DAYS_AGO = 7
-    LONG_TERM = True
+    # load data from config file:
+    with open("config.yml", "r") as config_file:
+        CONFIG = yaml.safe_load(config_file)
 
     BASE_URL = "http://www.wgcompany.de/"
-    query_url = urljoin(BASE_URL, "cgi-bin/zquery.pl")
-    blacklist = ["cis", "flint", "queer", "pronomen"]
+    QUERY_URL = urljoin(BASE_URL, "cgi-bin/zquery.pl")
 
-    params = {
-        "st": "1",  # Verstecktes input-Feld, wenn es fehlt liefert zquery.pl ein leeres Ergebnis zurück
-        "r": "1",  # Anzahl Zimmer gesucht
-        "g": [str(i) for i in range(ROOMS_RANGE[0], ROOMS_RANGE[1] + 1)],  # WG-Größe
-        "b": RENT_RANGE[0],  # min rent
-        "a": RENT_RANGE[1],  # max rent
-        "c": ROOM_SQM_RANGE[0],  # min room size
-        "d": ROOM_SQM_RANGE[1],  # max room size
-        "v": "dauerhaft" if LONG_TERM else "bis 6 Monate",  # wie lange
-        "p": MAX_DAYS_AGO,  # Nur WG-Angebote berücksichtigen, die nicht älter sind als in Tagen
-    }
-    r = requests.post(query_url, data=params)
-    soup = BeautifulSoup(r.text, "html.parser")
+    params = generate_params_from_config(CONFIG)
+
+    listings_request = requests.post(QUERY_URL, data=params)
+    soup = BeautifulSoup(listings_request.text, "html.parser")
     ad_rows = [row for row in soup.find_all("tr") if len(row) == 7]
 
     for row in ad_rows:
+        # Filter invalid rows:
         td_elements = row.select("td")
         link_element = td_elements[2].find("a", recursive=False)
         if not link_element or not link_element.get("href").startswith(
             "/cgi-bin/wg.pl"
         ):
-            print("no link element")
+            print("ERROR: link element missing or invalid")
             continue
 
         ad = get_data_from_row_element(row) | get_detail_from_ad_url(
