@@ -3,7 +3,7 @@ rent_range: [200, 800]
 n_rooms_range: [2, 8]
 room_sqm_range: [10, 40]
 filter_strings: ["flint", "trans", "pronomen"]
-max_age: 7
+max_age: 365
 long_term: true
 archive_file: "archive.json"
 ...
