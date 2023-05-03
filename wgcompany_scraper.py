@@ -56,6 +56,7 @@ def get_details(row):
     posted_on_iso_str = datetime.strptime(posted_on, "%d. %B %Y").strftime("%Y-%m-%d")
 
     description = soup.find("blockquote").text.strip()
+    available_from = td_elements[-1].get_text(strip=True).removeprefix("ab ").strip()
     available_for = (
         soup.select_one('#content td:-soup-contains("Wie lange")')
         .find_next_sibling("td")
@@ -63,17 +64,24 @@ def get_details(row):
         .split()[0]
     )
 
+    # get the desired age by ad authors:
+    age_bracket = (  # Alter with a non-breaking space
+        soup.find("td", string="Alter ").find_next_sibling().text.split("-")
+    )
+    # max_age has a default variable but min_age doesn't
+    min_age = int(age_bracket[0]) if age_bracket[0].strip() else 0
+    max_age = int(age_bracket[1])
+
     return {
         "title": url.split("=")[-1],
         "posted_on": posted_on_iso_str,
         "district": td_elements[1].get_text(strip=True),
-        "available_from": td_elements[-1]
-        .get_text(strip=True)
-        .removeprefix("ab ")
-        .strip(),
+        "available_from": available_from,
         "available_for": available_for,
-        "rent": td_elements[4].get_text(strip=True)[:-1],
-        "sqm": td_elements[5].get_text(strip=True)[:-2],
+        "min_age": min_age,
+        "max_age": max_age,
+        "rent": int(td_elements[4].get_text(strip=True)[:-1]),
+        "sqm": int(td_elements[5].get_text(strip=True)[:-2]),
         "description": description,
         "url": urljoin(BASE_URL, url),
         # "filtered": any(w in description.lower() for w in CONFIG["filter_strings"]),
@@ -112,7 +120,7 @@ if __name__ == "__main__":
         new_ads = [get_details(row) for row in get_listings(params)]
 
         print(f"{len(new_ads)} new ads found.")
-
+        break
         if new_ads:
             ads.update({ad["title"]: ad for ad in new_ads})
 

@@ -1,6 +1,8 @@
 <script>
 	import { onMount } from "svelte";
 
+	// TODO: filter for bad words in frontend instead of backend
+
 	let ads = [];
 	onMount(async () => {
 		const response = await fetch("./api/v0/ads");
