@@ -1,4 +1,5 @@
-import os, json, requests, yaml
+import os, json, requests, yaml, locale
+from datetime import datetime
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
@@ -15,7 +16,7 @@ def generate_params_from_config(config):
         "a": config["rent_range"][1],  # max rent
         "c": config["room_sqm_range"][0],  # min room size
         "d": config["room_sqm_range"][1],  # max room size
-        "v": "dauerhaft" if config["long_term"] else "bis 6 Monate",  # wie lange
+        # "v": "dauerhaft" if config["long_term"] else "bis 6 Monate",  # wie lange
         "p": config[
             "max_age"
         ],  # Nur WG-Angebote berücksichtigen, die nicht älter sind als max_age Tage
@@ -38,6 +39,9 @@ def scrape_listings(params):
             "/cgi-bin/wg.pl"
         ):
             print("ERROR: link element missing or invalid")
+            with open("error.html", "w") as error_file:
+                error_file.write(row.prettify())
+
             continue
 
         # merge dicts:
@@ -68,46 +72,70 @@ def get_detail_from_ad_url(url):
     r = requests.get(urljoin(BASE_URL, url))
     soup = BeautifulSoup(r.text, "html.parser")
 
+    posted_on = (
+        soup.select_one("#content font").text.strip().removeprefix("Eintrag vom ")
+    )
+    posted_on_iso_str = datetime.strptime(posted_on, "%d. %B %Y").strftime("%Y-%m-%d")
+
     description = soup.find("blockquote").text.strip()
+    available_for = (
+        soup.select_one('#content td:-soup-contains("Wie lange")')
+        .find_next_sibling("td")
+        .text.strip()
+        .split()[0]
+    )
 
     return {
         "title": url.split("=")[-1],
+        "posted_on": posted_on_iso_str,
+        "available_for": available_for,
         "description": description,
         "url": urljoin(BASE_URL, url),
         "filtered": any(w in description.lower() for w in CONFIG["filter_strings"]),
     }
 
 
+def load_existing_ads(file_url):
+    if os.path.isfile(file_url):
+        with open(file_url, "r") as archive_file:
+            return json.load(archive_file)
+    return {}
+
+
 if __name__ == "__main__":
     BASE_URL = "http://www.wgcompany.de/"
 
-    # load data from config file:
+    # Set up:
     with open("config.yml", "r") as config_file:
         CONFIG = yaml.safe_load(config_file)
 
-    ads = {}
-    if os.path.isfile(CONFIG["archive_file"]):
-        with open(CONFIG["archive_file"], "r") as archive_file:
-            ads = json.load(archive_file)
-
     params = generate_params_from_config(CONFIG)
+    locale.setlocale(locale.LC_TIME, "de_DE")
+    ads = load_existing_ads(CONFIG["archive_file"])
+    n_ads_total = len(ads)
 
     while True:
-        print("Scraping...")
+        print("Started scraping...")
 
-        recent_ads = {ad["title"]: ad for ad in scrape_listings(params)}
+        published_ads = {ad["title"]: ad for ad in scrape_listings(params)}
 
         # if a previously found ad is not in the new results, flag it as deleted:
-        for title in ads.keys() - recent_ads.keys():
+        deleted_ads = ads.keys() - published_ads.keys()
+        for title in deleted_ads:
             print(f"{title} was deleted")
             ads[title]["deleted"] = True
 
         # overwrite existing ads:
-        ads.update(recent_ads)
+        ads.update(published_ads)
+
+        print(
+            f"{len(published_ads)} ads found (+{len(ads) - n_ads_total}/-{len(deleted_ads)})"
+        )
+        n_ads_total = len(ads)
 
         # write everything back to file:
         with open(CONFIG["archive_file"], "w") as archive_file:
-            json.dump(recent_ads, archive_file, indent=2)
+            json.dump(ads, archive_file, ensure_ascii=False, indent=2)
             print(f"Updated {CONFIG['archive_file']}.")
 
         break
