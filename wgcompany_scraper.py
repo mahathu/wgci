@@ -40,13 +40,15 @@ def is_new_ad(row):
         return False
 
     ad_title = url.split("=")[-1]
+    # print(f"{ad_title} is in ads: {ad_title in ads}")
     return ad_title not in ads
 
 
 def get_details(row):
     td_elements = row.select("td")
-    url = td_elements[2].find("a", recursive=False).get("href")
 
+    url = td_elements[2].find("a", recursive=False).get("href")
+    print(f"Requesting {url}...")
     r = requests.get(urljoin(BASE_URL, url))
     soup = BeautifulSoup(r.text, "html.parser")
 
@@ -80,8 +82,8 @@ def get_details(row):
         "available_for": available_for,
         "min_age": min_age,
         "max_age": max_age,
-        "rent": int(td_elements[4].get_text(strip=True)[:-1]),
-        "sqm": int(td_elements[5].get_text(strip=True)[:-2]),
+        "rent": td_elements[4].get_text(strip=True)[:-1],
+        "sqm": td_elements[5].get_text(strip=True)[:-2],
         "description": description,
         "url": urljoin(BASE_URL, url),
         # "filtered": any(w in description.lower() for w in CONFIG["filter_strings"]),
@@ -120,7 +122,7 @@ if __name__ == "__main__":
         new_ads = [get_details(row) for row in get_listings(params)]
 
         print(f"{len(new_ads)} new ads found.")
-        break
+
         if new_ads:
             ads.update({ad["title"]: ad for ad in new_ads})
 
