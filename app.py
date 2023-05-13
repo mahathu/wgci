@@ -1,4 +1,5 @@
 from wgcompany_scraper import load_ads_from_file
+from datetime import date
 from flask import (
     Flask,
     request,
@@ -31,4 +32,7 @@ def static_files(path):
 @app.route("/api/v0/ads", methods=["GET"])
 def api_v0():
     ads = load_ads_from_file("archive.json")
-    return list(ads.values())
+
+    today = date.today().isoformat()
+    ads = sorted(ads.values(), key=lambda ad: ad.get("posted_on", today), reverse=True)
+    return ads

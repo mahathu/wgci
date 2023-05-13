@@ -2,6 +2,9 @@
 	import { onMount } from "svelte";
 	import Ad from "./Ad.svelte";
 
+	let api_error = "";
+	let api_error_text = "";
+
 	// TODO: filter for bad words in frontend instead of backend
 	let desiredDistricts = [
 		"Kreuzberg",
@@ -27,11 +30,14 @@
 
 	onMount(async () => {
 		const response = await fetch("./api/v0/ads");
+
+		if (!response.ok) {
+			api_error = response.status;
+			api_error_text = ;
+			return;
+		}
+
 		ads = await response.json();
-
-		ads.sort((a, b) => new Date(b.posted_on) - new Date(a.posted_on));
-
-		console.log(displayedAds[0]);
 	});
 </script>
 
@@ -53,18 +59,34 @@
 		</label>
 	</div>
 
+	{#if api_error}
+		<div class="api-error">
+			<div class="api-error-title">{api_error}</div>
+			<div class="api-error-desc">{api_error_text}</div>
+		</div>
+	{/if}
+
 	{#each displayedAds as ad}
 		<Ad {ad} />
 	{/each}
 </main>
 
 <style>
+	.api-error {
+		background-color: #ffcdd2;
+		border: 1px solid #e53935;
+		border-radius: 5px;
+		padding: 0.5rem 0.75rem;
+	}
+	.api-error-title {
+		font-weight: bold;
+	}
 	.filters {
 		margin: 1rem auto;
 	}
 
 	main {
-		max-width: 580px;
+		max-width: 680px;
 		margin: 0 auto;
 	}
 </style>
