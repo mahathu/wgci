@@ -2,8 +2,11 @@
 rent_range: [200, 800]
 n_rooms_range: [2, 8]
 room_sqm_range: [10, 40]
-filter_strings: ["flint", "trans", "pronomen"]
 max_age: 365
 long_term: true
-archive_file: "archive.json"
+archive_file: "archive.csv"
+filters:
+  desc_blacklist: ["flint", "trans"]
+  desired_districts: ["Wedding", "Kreuzberg", "Neukölln", "Friedrichshain"]
+  user_age: 24
 ...
